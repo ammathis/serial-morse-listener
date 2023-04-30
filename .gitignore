@@ -1,0 +1,5 @@
+venv
+.pytest_cache
+.vscode
+.ipynb_checkpoints
+*.ipynb
