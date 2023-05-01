@@ -23,19 +23,25 @@ class MorseListener:
             serial_device: str = None,
             reads_per_second: int = 100,
             save_history_path: str = None,
-            volume: float = 0.1
+            volume: float = 0.1,
+            keyboard: bool = False
     ):
         self.stop_event = stop_event
         self.wpm = wpm
         self.volume = volume
 
-        available_serial_devices = list(self.get_available_serial_devices('.*'))  # find all serial devices
-        if serial_device is None:
-            self.serial_device = self.choose_serial_device('usb')  # choose the first USB serial device
+        if keyboard:
+            self.serial_device = None
+            self.get_state = self.get_keyboard_state
         else:
-            self.serial_device = serial_device
-        if self.serial_device not in available_serial_devices:
-            raise RuntimeError(f'Specified serial device {self.serial_device} not found in available serial devices!')
+            available_serial_devices = list(self.get_available_serial_devices('.*'))  # find all serial devices
+            if serial_device is None:
+                self.serial_device = self.choose_serial_device('usb')  # choose the first USB serial device
+            else:
+                self.serial_device = serial_device
+            if self.serial_device not in available_serial_devices:
+                raise RuntimeError(f'Specified serial device {self.serial_device} not found in available serial devices!')
+            self.get_state = self.get_serial_state
 
         self.reads_per_second = reads_per_second
         if save_history_path is not None:
@@ -80,10 +86,15 @@ class MorseListener:
 
         chosen_device = matching_devices[0]
         return chosen_device
-
-    def get_state(self) -> int:
+    
+    def get_serial_state(self) -> int:
         with serial.Serial(self.serial_device) as ser:
             return int(ser.cts)
+
+    def get_keyboard_state(self) -> int:
+        if keyboard.is_pressed("esc"):
+            return 1
+        return 0
 
     @staticmethod
     def write_keyboard_event(event: str):
@@ -101,7 +112,7 @@ class MorseListener:
             while not self.stop_event.is_set():
                 # Get state
                 state = self.get_state()
-
+                print(f'State is {state}')
                 # Trigger audio
                 if state == 1:
                     audio_toggle.set()
@@ -129,6 +140,7 @@ def main():
         epilog='Morse code is so cool!'
         )
     parser.add_argument('wpm', type=float, help='Words-per-minute of listening')
+    parser.add_argument('-k', '--keyboard', help='Run in keyboard mode (press ESC to simulate serial press)', action='store_true')
     args = parser.parse_args()
 
     # Establish stop event
@@ -143,7 +155,7 @@ def main():
 
     signal.signal(signal.SIGINT, sigint_handler)
 
-    do_listen(stop_event=stop_event, wpm=args.wpm, reads_per_second=100)
+    do_listen(stop_event=stop_event, wpm=args.wpm, reads_per_second=100, keyboard=args.keyboard)
 
 
 if __name__ == '__main__':
