@@ -4,6 +4,7 @@
 
 A program to:
 * poll the CTS line of a serial port to get a binary state
+  * (alternatively, listen for alt_r keypress on the keyboard)
 * switch an audio tone on and off according to the input state
 * interpret the signal of states over time as morse code
 * and output the interpreted morse characters as keyboard events
@@ -16,9 +17,11 @@ python -m serial_morse_listener.listener <wpm>
 ```
 The `wpm` argument sets the expected speed of input signals. An appropriate words-per-minute for (slow) beginners is 5.
 
+Add the flag `-k` or `--keyboard` to listen for keyboard presses on the alt_r key instead of listening from the serial port. 
+
 ## Testing
 
-Even if you don't have an appropriate serial device handy, there is an integration test in [tests/test_listener.py](tests/test_listener.py) which mocks the serial input and keyboard output, so that you can try the code out easily.
+There is an integration test in [tests/test_listener.py](tests/test_listener.py) which mocks the serial input and keyboard output, so that you can try the code out easily.
 
 ## Extending
 
