@@ -32,10 +32,9 @@ class MorseListener:
         self.wpm = wpm
         self.volume = volume
 
+        self.keyboard_pressed = threading.Event()
+        self.keyboard_pressed.clear()
         if keyboard_mode:
-            self.keyboard_pressed = threading.Event()
-            self.keyboard_pressed.clear()
-
             def is_trigger_key(key: Optional[Union[Key, KeyCode]]) -> bool:
                 return key == Key.alt_r
 
@@ -47,11 +46,12 @@ class MorseListener:
                 if is_trigger_key(key):
                     self.keyboard_pressed.clear()
                     
-            self.serial_device = pynput.keyboard.Listener(
+            self.keyboard_listener = pynput.keyboard.Listener(
                 on_press=kb_press,
                 on_release=kb_release)
-            self.serial_device.start()
             self.get_state = self.get_keyboard_state
+
+            self.serial_device = None
             
         else:
             available_serial_devices = list(self.get_available_serial_devices('.*'))  # find all serial devices
@@ -64,6 +64,7 @@ class MorseListener:
                     f'Specified serial device {self.serial_device} not found in available serial devices!'
                 )
             self.get_state = self.get_serial_state
+            self.keyboard_listener = None
 
         self.reads_per_second = reads_per_second
         if save_history_path is not None:
@@ -129,6 +130,10 @@ class MorseListener:
         # Set up audio (paused to start)
         audio_toggle = threading.Event()
         audio_toggle.clear()
+
+        # Start keyboard listener
+        if self.keyboard_listener is not None:
+            self.keyboard_listener.start()
 
         with ToneGenerator(toggle_switch=audio_toggle, volume=self.volume) as _:
             while not self.stop_event.is_set():
