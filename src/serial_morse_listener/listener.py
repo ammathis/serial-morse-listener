@@ -4,11 +4,13 @@ import signal
 import sys
 import time
 import keyboard
+import pynput
+from pynput.keyboard import Key, KeyCode
 import numpy as np
 import argparse
 from pathlib import Path
 import threading
-from typing import Optional, Type, Iterator
+from typing import Optional, Type, Iterator, Union
 from types import TracebackType, FrameType
 
 from serial_morse_listener.tone_generator import ToneGenerator
@@ -23,19 +25,46 @@ class MorseListener:
             serial_device: str = None,
             reads_per_second: int = 100,
             save_history_path: str = None,
-            volume: float = 0.1
+            volume: float = 0.1,
+            keyboard_mode: bool = False
     ):
         self.stop_event = stop_event
         self.wpm = wpm
         self.volume = volume
 
-        available_serial_devices = list(self.get_available_serial_devices('.*'))  # find all serial devices
-        if serial_device is None:
-            self.serial_device = self.choose_serial_device('usb')  # choose the first USB serial device
+        self.keyboard_pressed = threading.Event()
+        self.keyboard_pressed.clear()
+        if keyboard_mode:
+            def is_trigger_key(key: Optional[Union[Key, KeyCode]]) -> bool:
+                return key == Key.alt_r
+
+            def kb_press(key: Optional[Union[Key, KeyCode]]):
+                if is_trigger_key(key):
+                    self.keyboard_pressed.set()
+
+            def kb_release(key: Optional[Union[Key, KeyCode]]):
+                if is_trigger_key(key):
+                    self.keyboard_pressed.clear()
+                    
+            self.keyboard_listener = pynput.keyboard.Listener(
+                on_press=kb_press,
+                on_release=kb_release)
+            self.get_state = self.get_keyboard_state
+
+            self.serial_device = None
+            
         else:
-            self.serial_device = serial_device
-        if self.serial_device not in available_serial_devices:
-            raise RuntimeError(f'Specified serial device {self.serial_device} not found in available serial devices!')
+            available_serial_devices = list(self.get_available_serial_devices('.*'))  # find all serial devices
+            if serial_device is None:
+                self.serial_device = self.choose_serial_device('usb')  # choose the first USB serial device
+            else:
+                self.serial_device = serial_device
+            if self.serial_device not in available_serial_devices:
+                raise RuntimeError(
+                    f'Specified serial device {self.serial_device} not found in available serial devices!'
+                )
+            self.get_state = self.get_serial_state
+            self.keyboard_listener = None
 
         self.reads_per_second = reads_per_second
         if save_history_path is not None:
@@ -80,10 +109,15 @@ class MorseListener:
 
         chosen_device = matching_devices[0]
         return chosen_device
-
-    def get_state(self) -> int:
+    
+    def get_serial_state(self) -> int:
         with serial.Serial(self.serial_device) as ser:
             return int(ser.cts)
+
+    def get_keyboard_state(self) -> int:
+        if self.keyboard_pressed.is_set():
+            return 1
+        return 0
 
     @staticmethod
     def write_keyboard_event(event: str):
@@ -97,11 +131,14 @@ class MorseListener:
         audio_toggle = threading.Event()
         audio_toggle.clear()
 
+        # Start keyboard listener
+        if self.keyboard_listener is not None:
+            self.keyboard_listener.start()
+
         with ToneGenerator(toggle_switch=audio_toggle, volume=self.volume) as _:
             while not self.stop_event.is_set():
                 # Get state
                 state = self.get_state()
-
                 # Trigger audio
                 if state == 1:
                     audio_toggle.set()
@@ -129,6 +166,12 @@ def main():
         epilog='Morse code is so cool!'
         )
     parser.add_argument('wpm', type=float, help='Words-per-minute of listening')
+    parser.add_argument(
+        '-k',
+        '--keyboard',
+        help='Run in keyboard mode (press alt_r to simulate serial press)',
+        action='store_true'
+    )
     args = parser.parse_args()
 
     # Establish stop event
@@ -143,7 +186,7 @@ def main():
 
     signal.signal(signal.SIGINT, sigint_handler)
 
-    do_listen(stop_event=stop_event, wpm=args.wpm, reads_per_second=100)
+    do_listen(stop_event=stop_event, wpm=args.wpm, reads_per_second=100, keyboard_mode=args.keyboard)
 
 
 if __name__ == '__main__':
