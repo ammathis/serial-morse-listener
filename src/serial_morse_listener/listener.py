@@ -4,6 +4,7 @@ import signal
 import sys
 import time
 import keyboard
+import pynput
 import numpy as np
 import argparse
 from pathlib import Path
@@ -31,8 +32,28 @@ class MorseListener:
         self.volume = volume
 
         if keyboard:
-            self.serial_device = None
+            self.keyboard_pressed = False
+            def kb_press(key):
+                try:
+                    if key.char == 'a':
+                        self.keyboard_pressed = True
+                        print(f'Keyboard pressed is now True')
+                except:
+                    pass
+            def kb_release(key):
+                try:
+                    if key.char == 'a':
+                        print(f'Keyboard pressed is now False')
+                        self.keyboard_pressed = False
+                except:
+                    pass
+                    
+            self.serial_device = pynput.keyboard.Listener(
+                on_press = kb_press,
+                on_release = kb_release)
+            self.serial_device.start()
             self.get_state = self.get_keyboard_state
+            
         else:
             available_serial_devices = list(self.get_available_serial_devices('.*'))  # find all serial devices
             if serial_device is None:
@@ -92,7 +113,7 @@ class MorseListener:
             return int(ser.cts)
 
     def get_keyboard_state(self) -> int:
-        if keyboard.is_pressed("esc"):
+        if self.keyboard_pressed:
             return 1
         return 0
 
@@ -112,7 +133,6 @@ class MorseListener:
             while not self.stop_event.is_set():
                 # Get state
                 state = self.get_state()
-                print(f'State is {state}')
                 # Trigger audio
                 if state == 1:
                     audio_toggle.set()
