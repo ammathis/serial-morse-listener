@@ -9,17 +9,17 @@ from serial_morse_listener.listener import do_listen
 
 @patch('serial_morse_listener.tone_generator.ToneGenerator.serialize_audio_samples')
 @patch('serial_morse_listener.listener.MorseListener.write_keyboard_event')
-@patch('serial_morse_listener.listener.MorseListener.get_state')
+@patch('serial_morse_listener.listener.MorseListener.get_serial_state')
 @patch('serial_morse_listener.listener.MorseListener.get_available_serial_devices')
 def test_listen(
         mock_get_available_serial_devices: MagicMock,
-        mock_get_state: MagicMock,
+        mock_get_serial_state: MagicMock,
         mock_write_keyboard_event: MagicMock,
         mock_serialize_audio_samples: MagicMock
 ):
 
     mock_get_available_serial_devices.return_value = ['usb1']
-    mock_get_state.return_value = 0
+    mock_get_serial_state.return_value = 0
 
     swallow_audio = True
 
@@ -44,9 +44,9 @@ def test_listen(
         # Start with some silence
         time.sleep(0.5)
         # Simulate the sending of one dit then silence (i.e., an "e")
-        mock_get_state.return_value = 1
+        mock_get_serial_state.return_value = 1
         time.sleep(0.1)
-        mock_get_state.return_value = 0
+        mock_get_serial_state.return_value = 0
         time.sleep(0.5)
         # Now stop
         stop_signal.set()
